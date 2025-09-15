@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "city": "Астана",
+    "event": "Концерт Imagine Dragons",
+    "date": "2025-09-20",
+    "price": 20000,
+    "paymentLink": "https://myservice.kz/pay/1"
+  },
+  {
+    "id": 2,
+    "city": "Алматы",
+    "event": "Концерт The Weeknd",
+    "date": "2025-10-05",
+    "price": 25000,
+    "paymentLink": "https://myservice.kz/pay/2"
+  }
+]
