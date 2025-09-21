@@ -8,12 +8,15 @@ import {
   Delete,
   HttpStatus,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BringCarsService } from './bring-cars.service';
 import { CreateBringCarDto } from './dto/create-bring-car.dto';
 import { UpdateBringCarDto } from './dto/update-bring-car.dto';
 import { BringCar } from './entities/bring-car.entity';
+import { GetBringCarsDto } from './dto/get-bring-cars.dto';
+import { BringCarResponseDto } from './dto/bring-car-response.dto';
 
 @ApiTags('bring-cars')
 @Controller('bring-cars')
@@ -32,16 +35,16 @@ export class BringCarsController {
     return this.bringCarsService.create(createBringCarDto);
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Получить все автомобили для загона' })
-  @ApiResponse({
-    status: 200,
-    description: 'Список автомобилей',
-    type: [BringCar],
-  })
-  findAll() {
-    return this.bringCarsService.findAll();
-  }
+  // @Get()
+  // @ApiOperation({ summary: 'Получить все автомобили для загона' })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Список автомобилей',
+  //   type: [BringCar],
+  // })
+  // findAll() {
+  //   return this.bringCarsService.findAll();
+  // }
 
   @Get(':id')
   @ApiOperation({ summary: 'Получить автомобиль по ID' })
@@ -88,4 +91,32 @@ export class BringCarsController {
     return this.bringCarsService.toggleActive(id);
   }
 
+  @Get()
+  @ApiOperation({
+    summary: 'Получить список автомобилей с фильтрацией и пагинацией',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Список автомобилей',
+    schema: {
+      example: {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+      },
+    },
+  })
+  async getBringCars(@Query() query: GetBringCarsDto): Promise<{
+    data: BringCarResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    if (query.order) {
+      query.order = query.order.toUpperCase() as 'ASC' | 'DESC';
+    }
+
+    return this.bringCarsService.getBringCars(query);
+  }
 }

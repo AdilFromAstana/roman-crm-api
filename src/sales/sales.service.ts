@@ -1,30 +1,39 @@
+// sales/sales.service.ts
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
   forwardRef,
   Inject,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Sale } from './entities/sale.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
-import { BringCarsService } from '../bring-cars/bring-cars.service';
-import { CustomersService } from '../customers/customers.service';
-import { EmployeesService } from '../employees/employees.service';
-import { SalesStatusesService } from '../sales-statuses/sales-statuses.service';
-import { EmployeeIncomesService } from '../employee-incomes/employee-incomes.service';
-import { EmployeeIncome } from '../employee-incomes/entities/employee-income.entity';
+import { SalesValidators } from './sales.validators';
+import { SalesHelpers } from './sales.helpers';
+import { SalesStatusHandlers } from './sales.status-handlers';
+import { SalesIncomeProcessors } from './sales.income-processors';
+import { BringCarsService } from 'src/bring-cars/bring-cars.service';
+import { CustomersService } from 'src/customers/customers.service';
+import { EmployeesService } from 'src/employees/employees.service';
+import { SalesStatusesService } from 'src/sales-statuses/sales-statuses.service';
+import { EmployeeIncomesService } from 'src/employee-incomes/employee-incomes.service';
+import { SaleStatus } from './enums/sale-status.enum';
 
 @Injectable()
 export class SalesService {
+  private readonly validators: SalesValidators;
+  private readonly helpers: SalesHelpers;
+  private readonly statusHandlers: SalesStatusHandlers;
+  private readonly incomeProcessors: SalesIncomeProcessors;
+
   constructor(
     @InjectRepository(Sale)
     private readonly salesRepository: Repository<Sale>,
 
-    private readonly dataSource: DataSource, // Добавляем DataSource
-
+    private readonly dataSource: DataSource,
     private readonly bringCarsService: BringCarsService,
     private readonly customersService: CustomersService,
     private readonly employeesService: EmployeesService,
@@ -32,8 +41,21 @@ export class SalesService {
 
     @Inject(forwardRef(() => EmployeeIncomesService))
     private readonly employeeIncomesService: EmployeeIncomesService,
-  ) {}
+  ) {
+    // Инициализируем вспомогательные классы
+    this.validators = new SalesValidators(
+      this.bringCarsService,
+      this.customersService,
+      this.employeesService,
+      this.salesStatusesService,
+    );
 
+    this.helpers = new SalesHelpers(this.salesRepository);
+    this.statusHandlers = new SalesStatusHandlers(this.salesRepository);
+    this.incomeProcessors = new SalesIncomeProcessors();
+  }
+
+  // CRUD операции
   async findAll(): Promise<Sale[]> {
     return this.salesRepository.find({
       order: { saleDate: 'DESC' },
@@ -98,7 +120,6 @@ export class SalesService {
     try {
       const sale = await this.findOne(id);
       await queryRunner.manager.remove(sale);
-
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -117,7 +138,6 @@ export class SalesService {
       const sale = await this.findOne(id);
       sale.isActive = !sale.isActive;
       const updatedSale = await queryRunner.manager.save(sale);
-
       await queryRunner.commitTransaction();
       return updatedSale;
     } catch (error) {
@@ -128,30 +148,6 @@ export class SalesService {
     }
   }
 
-  // Валидация бонусов
-  private validateBonusAmounts(saleDto: CreateSaleDto | UpdateSaleDto): void {
-    const saleEmployeeBonus = saleDto.saleEmployeeBonus || 0;
-    const bringEmployeeBonus = saleDto.bringEmployeeBonus || 0;
-    const managerEmployeeBonus = saleDto.managerEmployeeBonus || 0;
-    const netProfit = saleDto.netProfit || 0;
-    const totalBonuses = saleDto.totalBonuses || 0;
-
-    const calculatedTotal =
-      saleEmployeeBonus + bringEmployeeBonus + managerEmployeeBonus;
-
-    if (calculatedTotal > netProfit) {
-      throw new BadRequestException(
-        'Сумма бонусов не может превышать чистую прибыль',
-      );
-    }
-
-    if (calculatedTotal !== totalBonuses) {
-      throw new BadRequestException(
-        'Общая сумма бонусов не соответствует сумме отдельных бонусов',
-      );
-    }
-  }
-
   async create(createSaleDto: CreateSaleDto): Promise<Sale> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -159,21 +155,27 @@ export class SalesService {
 
     try {
       // Проверяем существование всех связанных сущностей
-      await this.validateRelatedEntities(createSaleDto);
+      await this.validators.validateRelatedEntities(createSaleDto);
+      await this.helpers.checkCarSaleStatus(createSaleDto.bringCarId);
 
       // Валидируем бонусы
-      this.validateBonusAmounts(createSaleDto);
+      this.validators.validateBonusAmounts(
+        createSaleDto,
+        createSaleDto.salePrice,
+        createSaleDto.purchasePrice,
+      );
 
       // Создаем продажу
       const sale = queryRunner.manager.create(Sale, {
         ...createSaleDto,
-        salesStatusCode: 'ON_APPROVAL', // Начальный статус
+        netProfit: createSaleDto.salePrice - createSaleDto.purchasePrice,
+        saleDate: new Date(createSaleDto.saleDate),
+        salesStatusCode: SaleStatus.ON_APPROVAL,
         isCommissionPaid: false,
         isActive: createSaleDto.isActive ?? true,
       });
 
       const savedSale = await queryRunner.manager.save(sale);
-
       await queryRunner.commitTransaction();
       return this.findOne(savedSale.id);
     } catch (error) {
@@ -184,110 +186,185 @@ export class SalesService {
     }
   }
 
+  // sales/sales.service.ts
   async update(id: string, updateSaleDto: UpdateSaleDto): Promise<Sale> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    console.log(`Частичное обновление продажи ID: ${id}`);
 
-    try {
-      const sale = await this.findOne(id);
+    return this.dataSource.transaction(async (manager) => {
+      // Получаем текущую продажу
+      const sale = await manager.findOne(Sale, {
+        where: { id },
+        relations: [
+          'bringCar',
+          'customer',
+          'saleEmployee',
+          'bringEmployee',
+          'managerEmployee',
+          'salesStatus',
+        ],
+      });
 
-      // Проверяем существование связанных сущностей если они обновляются
-      if (this.hasRelatedEntityUpdates(updateSaleDto)) {
-        await this.validateRelatedEntities({
-          ...sale,
-          ...updateSaleDto,
-        } as CreateSaleDto);
+      if (!sale) {
+        throw new NotFoundException(`Sale with ID ${id} not found`);
       }
 
-      // Валидируем бонусы если они обновляются
-      if (
-        updateSaleDto.saleEmployeeBonus !== undefined ||
-        updateSaleDto.bringEmployeeBonus !== undefined ||
-        updateSaleDto.managerEmployeeBonus !== undefined ||
-        updateSaleDto.totalBonuses !== undefined ||
-        updateSaleDto.netProfit !== undefined
-      ) {
-        const bonusDto = {
-          ...sale,
-          ...updateSaleDto,
-        } as CreateSaleDto;
+      console.log('Текущая продажа:', {
+        id: sale.id,
+        currentStatus: sale.salesStatusCode,
+        currentPrice: sale.salePrice,
+      });
 
-        this.validateBonusAmounts(bonusDto);
+      // Фильтруем только переданные поля
+      const updateFields: Partial<Sale> = {};
+      const updatedFieldNames: string[] = [];
+
+      Object.keys(updateSaleDto).forEach((key) => {
+        if (updateSaleDto[key] !== undefined) {
+          updateFields[key] = updateSaleDto[key];
+          updatedFieldNames.push(key);
+        }
+      });
+
+      console.log('Обновляемые поля:', updatedFieldNames);
+
+      // Проверки только для переданных полей
+      if (
+        updatedFieldNames.some((field) =>
+          [
+            'bringCarId',
+            'customerId',
+            'saleEmployeeId',
+            'bringEmployeeId',
+            'managerEmployeeId',
+          ].includes(field),
+        )
+      ) {
+        console.log('Проверяем связанные сущности...');
+        await this.validators.validateRelatedEntities(updateSaleDto);
       }
 
-      // Если меняется статус на BONUSES_ISSUED, создаем записи доходов
+      // Проверка смены статуса
+      const newStatus = updateSaleDto.salesStatusCode;
+      const oldStatus = sale.salesStatusCode;
+
+      if (newStatus && newStatus !== oldStatus) {
+        console.log('Проверяем валидацию статуса...', { oldStatus, newStatus });
+        await this.statusHandlers.validateStatusRequirements(
+          sale,
+          updateSaleDto,
+        );
+      }
+
+      // Валидация бонусов только если переданы бонусные поля
       if (
-        updateSaleDto.salesStatusCode === 'BONUSES_ISSUED' &&
-        sale.salesStatusCode !== 'BONUSES_ISSUED'
+        updatedFieldNames.some((field) =>
+          [
+            'saleEmployeeBonus',
+            'bringEmployeeBonus',
+            'managerEmployeeBonus',
+            'totalBonuses',
+            'salePrice',
+            'purchasePrice',
+          ].includes(field),
+        )
       ) {
-        await this.createEmployeeIncomeRecordsWithManager(
-          queryRunner.manager,
+        console.log('Валидируем бонусы...');
+        const salePrice =
+          updateSaleDto.salePrice !== undefined
+            ? updateSaleDto.salePrice
+            : sale.salePrice;
+        const purchasePrice =
+          updateSaleDto.purchasePrice !== undefined
+            ? updateSaleDto.purchasePrice
+            : sale.purchasePrice;
+
+        this.validators.validateBonusAmounts(
+          updateSaleDto,
+          salePrice,
+          purchasePrice,
+        );
+      }
+
+      if (newStatus === SaleStatus.SOLD && oldStatus !== SaleStatus.SOLD) {
+        console.log('Обновляем статус загнанного автомобиля на SOLD...');
+
+        try {
+          // Обновляем статус через сервис
+          await this.bringCarsService.updateBringCarStatus(
+            sale.bringCarId,
+            'SOLD',
+          );
+
+          console.log(`Статус автомобиля ${sale.bringCarId} обновлен на SOLD`);
+        } catch (error) {
+          console.error('Ошибка при обновлении статуса автомобиля:', error);
+          throw new BadRequestException(
+            'Не удалось обновить статус загнанного автомобиля',
+          );
+        }
+      }
+
+      // Специальная обработка для статусов
+      if (
+        newStatus === SaleStatus.BONUSES_ISSUED &&
+        oldStatus !== SaleStatus.BONUSES_ISSUED
+      ) {
+        console.log('Создаем записи доходов для бонусов...');
+
+        // Обновляем сущность для передачи в income processor
+        Object.assign(sale, updateFields);
+        if (updateSaleDto.saleDate) {
+          sale.saleDate = new Date(updateSaleDto.saleDate);
+        }
+
+        // Создаем записи доходов
+        await this.incomeProcessors.createEmployeeIncomeRecordsWithManager(
+          manager,
           sale,
         );
       }
 
-      Object.assign(sale, updateSaleDto);
-      const updatedSale = await queryRunner.manager.save(sale);
+      if (
+        newStatus === SaleStatus.COMMISSION_ISSUED &&
+        oldStatus !== SaleStatus.COMMISSION_ISSUED
+      ) {
+        console.log('Отмечаем выплату комиссии...');
+        updateFields.isCommissionPaid = true;
+      }
 
-      await queryRunner.commitTransaction();
-      return this.findOne(updatedSale.id);
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
+      // Выполняем частичное обновление только переданных полей
+      console.log('Выполняем частичное обновление...');
+      await manager.update(Sale, id, updateFields);
+
+      // Получаем обновленную сущность
+      const updatedSale = await manager.findOne(Sale, {
+        where: { id },
+        relations: [
+          'bringCar',
+          'customer',
+          'saleEmployee',
+          'bringEmployee',
+          'managerEmployee',
+          'salesStatus',
+        ],
+      });
+
+      if (!updatedSale) {
+        throw new NotFoundException(
+          `Sale with ID ${id} not found after update`,
+        );
+      }
+
+      console.log('Финальная сущность:', {
+        id: updatedSale.id,
+        status: updatedSale.salesStatusCode,
+        price: updatedSale.salePrice,
+      });
+
+      return updatedSale;
+    });
   }
 
-  // Создание записей доходов сотрудников с использованием менеджера из транзакции
-  private async createEmployeeIncomeRecordsWithManager(
-    manager: any,
-    sale: Sale,
-  ): Promise<void> {
-    try {
-      // Бонус продавца
-      if (sale.saleEmployeeBonus > 0) {
-        const income = manager.create(EmployeeIncome, {
-          employeeId: sale.saleEmployeeId,
-          saleId: sale.id,
-          incomeAmount: sale.saleEmployeeBonus,
-          incomeType: 'SALE_BONUS',
-          description: `Бонус за продажу ${sale.bringCar.brandCode} ${sale.bringCar.modelCode}`,
-        });
-        await manager.save(income);
-      }
-
-      // Бонус загнавшего
-      if (sale.bringEmployeeBonus > 0) {
-        const income = manager.create(EmployeeIncome, {
-          employeeId: sale.bringEmployeeId,
-          saleId: sale.id,
-          incomeAmount: sale.bringEmployeeBonus,
-          incomeType: 'SALE_BONUS',
-          description: `Бонус за загон ${sale.bringCar.brandCode} ${sale.bringCar.modelCode}`,
-        });
-        await manager.save(income);
-      }
-
-      // Бонус менеджера (если есть)
-      if (sale.managerEmployeeId && sale.managerEmployeeBonus > 0) {
-        const income = manager.create(EmployeeIncome, {
-          employeeId: sale.managerEmployeeId,
-          saleId: sale.id,
-          incomeAmount: sale.managerEmployeeBonus,
-          incomeType: 'SALE_BONUS',
-          description: `Бонус менеджера за продажу ${sale.bringCar.brandCode} ${sale.bringCar.modelCode}`,
-        });
-        await manager.save(income);
-      }
-    } catch (error) {
-      console.error('Ошибка при создании записей доходов:', error);
-      throw error; // Пробрасываем ошибку для rollback
-    }
-  }
-
-  // Статистика продаж
   async getSalesStats(): Promise<any> {
     const allSales = await this.findAll();
 
@@ -298,7 +375,7 @@ export class SalesService {
     );
     const totalProfit = allSales.reduce((sum, sale) => sum + sale.netProfit, 0);
     const totalBonuses = allSales.reduce(
-      (sum, sale) => sum + sale.totalBonuses,
+      (sum, sale) => sum + (sale.totalBonuses || 0),
       0,
     );
 
@@ -316,46 +393,5 @@ export class SalesService {
       totalBonuses,
       statusStats,
     };
-  }
-
-  // Валидация связанных сущностей
-  private async validateRelatedEntities(
-    dto: CreateSaleDto | UpdateSaleDto,
-  ): Promise<void> {
-    try {
-      if (dto.bringCarId) await this.bringCarsService.findOne(dto.bringCarId);
-      if (dto.customerId) await this.customersService.findOne(dto.customerId);
-      if (dto.saleEmployeeId)
-        await this.employeesService.findOne(dto.saleEmployeeId);
-      if (dto.bringEmployeeId)
-        await this.employeesService.findOne(dto.bringEmployeeId);
-
-      if (dto.managerEmployeeId) {
-        await this.employeesService.findOne(dto.managerEmployeeId);
-      }
-
-      // Проверяем статус если он указан
-      const updateDto = dto as UpdateSaleDto;
-      if (updateDto.salesStatusCode) {
-        await this.salesStatusesService.findOneByCode(
-          updateDto.salesStatusCode,
-        );
-      }
-    } catch (error) {
-      throw new BadRequestException(
-        'Одна или несколько связанных сущностей не найдены',
-      );
-    }
-  }
-
-  private hasRelatedEntityUpdates(dto: UpdateSaleDto): boolean {
-    return !!(
-      dto.bringCarId ||
-      dto.customerId ||
-      dto.saleEmployeeId ||
-      dto.bringEmployeeId ||
-      dto.managerEmployeeId ||
-      dto.salesStatusCode
-    );
   }
 }

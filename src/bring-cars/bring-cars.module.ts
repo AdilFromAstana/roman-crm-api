@@ -12,7 +12,7 @@ import { TransmissionsModule } from '../transmissions/transmissions.module';
 import { EmployeesModule } from '../employees/employees.module';
 import { FeaturesModule } from '../features/features.module';
 import { BringCarImagesModule } from '../bring-car-images/bring-car-images.module';
-import { SalesStatusesModule } from '../sales-statuses/sales-statuses.module';
+import { BringCarStatusesModule } from 'src/bring-car-statuses/bring-car-statuses.module';
 
 @Module({
   imports: [
@@ -24,8 +24,8 @@ import { SalesStatusesModule } from '../sales-statuses/sales-statuses.module';
     TransmissionsModule,
     EmployeesModule,
     FeaturesModule,
+    BringCarStatusesModule,
     forwardRef(() => BringCarImagesModule),
-    forwardRef(() => SalesStatusesModule),
   ],
   controllers: [BringCarsController],
   providers: [BringCarsService],

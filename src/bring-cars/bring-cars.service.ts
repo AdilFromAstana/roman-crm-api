@@ -7,7 +7,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, Brackets } from 'typeorm';
 import { BringCar } from './entities/bring-car.entity';
 import { CreateBringCarDto } from './dto/create-bring-car.dto';
 import { UpdateBringCarDto } from './dto/update-bring-car.dto';
@@ -19,8 +19,9 @@ import { FuelTypesService } from '../fuel-types/fuel-types.service';
 import { TransmissionsService } from '../transmissions/transmissions.service';
 import { EmployeesService } from '../employees/employees.service';
 import { FeaturesService } from '../features/features.service';
-import { SalesStatusesService } from '../sales-statuses/sales-statuses.service';
 import { BringCarResponseDto } from './dto/bring-car-response.dto';
+import { BringCarStatusesService } from 'src/bring-car-statuses/bring-car-statuses.service';
+import { GetBringCarsDto } from './dto/get-bring-cars.dto';
 
 @Injectable()
 export class BringCarsService {
@@ -31,6 +32,7 @@ export class BringCarsService {
     @Inject(forwardRef(() => BringCarImagesService))
     private readonly bringCarImagesService: BringCarImagesService,
 
+    private readonly dataSource: DataSource,
     private readonly brandsService: BrandsService,
     private readonly modelsService: ModelsService,
     private readonly colorsService: ColorsService,
@@ -38,9 +40,7 @@ export class BringCarsService {
     private readonly transmissionsService: TransmissionsService,
     private readonly employeesService: EmployeesService,
     private readonly featuresService: FeaturesService,
-
-    @Inject(forwardRef(() => SalesStatusesService))
-    private readonly salesStatusesService: SalesStatusesService,
+    private readonly bringCarStatusesService: BringCarStatusesService,
   ) {}
 
   async create(
@@ -89,6 +89,163 @@ export class BringCarsService {
     });
 
     return cars.map((car) => this.mapToResponseDto(car));
+  }
+
+  async getBringCars(query: GetBringCarsDto): Promise<{
+    data: BringCarResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    console.log('Received query:', JSON.stringify(query, null, 2));
+    const normalizedQuery = {
+      ...query,
+      order: query.order
+        ? (query.order.toUpperCase() as 'ASC' | 'DESC')
+        : 'ASC',
+    };
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      sort,
+      order = 'ASC',
+      brandCodes,
+      modelCodes,
+      colorCodes,
+      fuelTypeCodes,
+      transmissionCodes,
+      employeeIds,
+      yearFrom,
+      yearTo,
+      priceFrom,
+      priceTo,
+      featureCodes,
+    } = normalizedQuery;
+
+    const skip = (page - 1) * limit;
+
+    const qb = this.bringCarsRepository
+      .createQueryBuilder('bringCar')
+      .leftJoinAndSelect('bringCar.brand', 'brand')
+      .leftJoinAndSelect('bringCar.model', 'model')
+      .leftJoinAndSelect('bringCar.color', 'color')
+      .leftJoinAndSelect('bringCar.fuelType', 'fuelType')
+      .leftJoinAndSelect('bringCar.transmission', 'transmission')
+      .leftJoinAndSelect('bringCar.bringEmployee', 'employee')
+      .leftJoinAndSelect('bringCar.images', 'images');
+
+    // Фильтры по кодам
+    if (brandCodes && brandCodes.length > 0) {
+      qb.andWhere('bringCar.brandCode IN (:...brandCodes)', { brandCodes });
+    }
+
+    if (modelCodes && modelCodes.length > 0) {
+      qb.andWhere('bringCar.modelCode IN (:...modelCodes)', { modelCodes });
+    }
+
+    if (colorCodes && colorCodes.length > 0) {
+      qb.andWhere('bringCar.colorCode IN (:...colorCodes)', { colorCodes });
+    }
+
+    if (fuelTypeCodes && fuelTypeCodes.length > 0) {
+      qb.andWhere('bringCar.fuelTypeCode IN (:...fuelTypeCodes)', {
+        fuelTypeCodes,
+      });
+    }
+
+    if (transmissionCodes && transmissionCodes.length > 0) {
+      qb.andWhere('bringCar.transmissionCode IN (:...transmissionCodes)', {
+        transmissionCodes,
+      });
+    }
+
+    if (employeeIds && employeeIds.length > 0) {
+      qb.andWhere('bringCar.bringEmployeeId IN (:...employeeIds)', {
+        employeeIds,
+      });
+    }
+
+    if (yearFrom) {
+      qb.andWhere('bringCar.year >= :yearFrom', { yearFrom });
+    }
+
+    if (yearTo) {
+      qb.andWhere('bringCar.year <= :yearTo', { yearTo });
+    }
+
+    if (priceFrom) {
+      qb.andWhere('bringCar.price >= :priceFrom', { priceFrom });
+    }
+
+    if (priceTo) {
+      qb.andWhere('bringCar.price <= :priceTo', { priceTo });
+    }
+
+    if (featureCodes && featureCodes.length > 0) {
+      qb.andWhere('bringCar.featureCodes && :featureCodes', { featureCodes });
+    }
+
+    // Поиск по полям
+    if (search) {
+      qb.andWhere(
+        new Brackets((qb) => {
+          qb.where('bringCar.id LIKE :search', { search: `%${search}%` })
+            .orWhere('brand.name LIKE :search', { search: `%${search}%` })
+            .orWhere('model.name LIKE :search', { search: `%${search}%` })
+            .orWhere('color.name LIKE :search', { search: `%${search}%` })
+            .orWhere('employee.firstName LIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('employee.lastName LIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('bringCar.year::text LIKE :search', {
+              search: `%${search}%`,
+            });
+        }),
+      );
+    }
+
+    // Сортировка
+    if (sort) {
+      switch (sort) {
+        case 'brandCode':
+          qb.orderBy('brand.name', order);
+          break;
+        case 'modelCode':
+          qb.orderBy('model.name', order);
+          break;
+        case 'colorCode':
+          qb.orderBy('color.name', order);
+          break;
+        case 'fuelTypeCode':
+          qb.orderBy('fuelType.name', order);
+          break;
+        case 'transmissionCode':
+          qb.orderBy('transmission.name', order);
+          break;
+        case 'bringEmployeeId':
+          qb.orderBy('employee.firstName', order);
+          break;
+        default:
+          qb.orderBy(`bringCar.${sort}`, order);
+      }
+    } else {
+      qb.orderBy('bringCar.createdAt', 'DESC');
+    }
+
+    const [result, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    const data = result.map((car) => this.mapToResponseDto(car));
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
   }
 
   async findOne(id: string): Promise<BringCarResponseDto> {
@@ -178,6 +335,34 @@ export class BringCarsService {
 
     // Возвращаем Response DTO
     return this.mapToResponseDto(updatedCar);
+  }
+
+  async updateBringCarStatus(
+    bringCarId: string,
+    statusCode: string,
+  ): Promise<void> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Проверяем существование статуса
+      await this.bringCarStatusesService.findOneByCode(statusCode);
+
+      // Обновляем статус автомобиля
+      await queryRunner.manager.update(
+        BringCar,
+        { id: bringCarId },
+        { bringCarStatusCode: statusCode },
+      );
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // Валидация связанных сущностей с детальными ошибками

@@ -35,6 +35,8 @@ import { SalesModule } from './sales/sales.module';
 import { Sale } from './sales/entities/sale.entity';
 import { EmployeeIncome } from './employee-incomes/entities/employee-income.entity';
 import { EmployeeIncomesModule } from './employee-incomes/employee-incomes.module';
+import { BringCarStatusesModule } from './bring-car-statuses/bring-car-statuses.module';
+import { BringCarStatus } from './bring-car-statuses/entities/bring-car-status.entity';
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { EmployeeIncomesModule } from './employee-incomes/employee-incomes.modul
       password: 'postgres',
       database: 'avto-crm',
       entities: [
+        BringCarStatus,
+        Sale,
         Brand,
         Model,
         Color,
@@ -62,10 +66,11 @@ import { EmployeeIncomesModule } from './employee-incomes/employee-incomes.modul
         Customer,
         CustomerStatus,
         CustomerInteraction,
-        Sale,
       ],
       synchronize: true,
     }),
+    BringCarStatusesModule,
+    SalesModule,
     BrandsModule,
     ModelsModule,
     ColorsModule,
@@ -82,7 +87,6 @@ import { EmployeeIncomesModule } from './employee-incomes/employee-incomes.modul
     CustomersModule,
     CustomerStatusesModule,
     CustomerInteractionsModule,
-    SalesModule,
   ],
 })
 export class AppModule {}

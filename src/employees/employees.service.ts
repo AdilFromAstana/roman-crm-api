@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -27,6 +28,9 @@ export class EmployeesService {
     ) {
       await this.validatePositionCodes(createEmployeeDto.positionCodes);
     }
+
+    // Проверяем уникальность email и телефона перед созданием
+    await this.checkUniqueFields(createEmployeeDto);
 
     const employee = this.employeesRepository.create({
       ...createEmployeeDto,
@@ -102,6 +106,37 @@ export class EmployeesService {
         message: 'Ошибки валидации позиций',
         errors: errors,
       });
+    }
+  }
+
+  private async checkUniqueFields(dto: CreateEmployeeDto): Promise<void> {
+    const errors: string[] = [];
+
+    // Проверяем email если он указан
+    if (dto.email) {
+      const existingEmployee = await this.employeesRepository.findOne({
+        where: { email: dto.email },
+      });
+
+      if (existingEmployee) {
+        errors.push('Пользователь с таким email уже существует');
+      }
+    }
+
+    // Проверяем телефон если он указан
+    if (dto.phone) {
+      const existingEmployee = await this.employeesRepository.findOne({
+        where: { phone: dto.phone },
+      });
+
+      if (existingEmployee) {
+        errors.push('Пользователь с таким телефоном уже существует');
+      }
+    }
+
+    // Если есть ошибки, выбрасываем исключение
+    if (errors.length > 0) {
+      throw new ConflictException(errors);
     }
   }
 }

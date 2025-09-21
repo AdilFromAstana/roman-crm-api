@@ -8,7 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Employee } from '../../employees/entities/employee.entity';
-import { Sale } from '../../sales/entities/sale.entity';
+import { Sale } from 'src/sales/entities/sale.entity';
 
 @Entity('employee_incomes')
 export class EmployeeIncome {

@@ -1,3 +1,4 @@
+// sales/entities/sale.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -12,8 +13,8 @@ import { BringCar } from '../../bring-cars/entities/bring-car.entity';
 import { Customer } from '../../customers/entities/customer.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 import { SalesStatus } from '../../sales-statuses/entities/sales-status.entity';
+import { SaleStatus } from '../enums/sale-status.enum'; // Добавляем импорт
 
-// sales/entities/sale.entity.ts
 @Entity('sales')
 export class Sale {
   @PrimaryGeneratedColumn('uuid')
@@ -35,21 +36,21 @@ export class Sale {
 
   // Сотрудники участвующие в продаже
   @Column({ type: 'uuid' })
-  saleEmployeeId: string; // Сотрудник-продавец
+  saleEmployeeId: string;
 
   @ManyToOne(() => Employee)
   @JoinColumn({ name: 'saleEmployeeId' })
   saleEmployee: Employee;
 
   @Column({ type: 'uuid' })
-  bringEmployeeId: string; // Сотрудник, загнавший авто
+  bringEmployeeId: string;
 
   @ManyToOne(() => Employee)
   @JoinColumn({ name: 'bringEmployeeId' })
   bringEmployee: Employee;
 
   @Column({ type: 'uuid', nullable: true })
-  managerEmployeeId: string; // Менеджер (опционально)
+  managerEmployeeId: string;
 
   @ManyToOne(() => Employee, { nullable: true })
   @JoinColumn({ name: 'managerEmployeeId' })
@@ -57,41 +58,43 @@ export class Sale {
 
   // Финансовая информация
   @Column({ type: 'decimal', precision: 15, scale: 2 })
-  purchasePrice: number; // Цена загона (из BringCar)
+  purchasePrice: number;
 
   @Column({ type: 'decimal', precision: 15, scale: 2 })
-  salePrice: number; // Цена продажи
+  salePrice: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2 })
-  netProfit: number; // Чистая прибыль (salePrice - purchasePrice)
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  netProfit: number;
 
-  // Бонусы (конкретные суммы)
-  @Column({ type: 'decimal', precision: 15, scale: 2 })
-  saleEmployeeBonus: number; // Бонус продавца (конкретная сумма)
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  saleEmployeeBonus: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2 })
-  bringEmployeeBonus: number; // Бонус загнавшего (конкретная сумма)
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  bringEmployeeBonus: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
-  managerEmployeeBonus: number; // Бонус менеджера (конкретная сумма)
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  managerEmployeeBonus: number;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2 })
-  totalBonuses: number; // Общая сумма бонусов
+  @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
+  totalBonuses: number;
 
   // Статус продажи
-  @Column({ type: 'varchar', length: 50 })
-  salesStatusCode: string; // ON_APPROVAL, ON_PROCESSING, SOLD, etc.
+  @Column({
+    type: 'varchar',
+    length: 50,
+  })
+  salesStatusCode: string;
 
   @ManyToOne(() => SalesStatus)
   @JoinColumn({ name: 'salesStatusCode', referencedColumnName: 'code' })
   salesStatus: SalesStatus;
 
   @Column({ type: 'boolean', default: false })
-  isCommissionPaid: boolean; // Выплачены ли все бонусы
+  isCommissionPaid: boolean;
 
   // Даты
   @Column({ type: 'timestamp' })
-  saleDate: Date; // Дата продажи
+  saleDate: Date;
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;

@@ -1,3 +1,4 @@
+// sales/dto/create-sale.dto.ts
 import {
   IsString,
   IsBoolean,
@@ -9,9 +10,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
 
-// sales/dto/create-sale.dto.ts
 export class CreateSaleDto {
   @ApiProperty({
     example: '550e4d8c-9b1c-4c2d-8c3d-4e5f6a7b8c9d',
@@ -54,44 +53,43 @@ export class CreateSaleDto {
   @IsOptional()
   managerEmployeeId?: string;
 
-  @ApiProperty({ example: 6000000, description: 'Цена продажи' })
+  @ApiProperty({
+    example: 6000000,
+    description: 'Цена продажи автомобиля клиенту',
+  })
   @IsNumber()
   @Min(0)
   @IsNotEmpty()
   salePrice: number;
 
-  @ApiProperty({ example: 5000000, description: 'Цена закупки (из загона)' })
+  @ApiProperty({
+    example: 5000000,
+    description: 'Цена закупки автомобиля (из загона)',
+  })
   @IsNumber()
   @Min(0)
   @IsNotEmpty()
   purchasePrice: number;
 
-  @ApiProperty({
-    example: 1000000,
-    description: 'Чистая прибыль (salePrice - purchasePrice)',
-  })
-  @IsNumber()
-  @Min(0)
-  @IsNotEmpty()
-  netProfit: number;
-
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 400000,
     description: 'Бонус продавца (конкретная сумма)',
+    required: false,
   })
   @IsNumber()
   @Min(0)
-  @IsNotEmpty()
-  saleEmployeeBonus: number;
+  @IsOptional()
+  saleEmployeeBonus?: number;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 300000,
     description: 'Бонус загнавшего (конкретная сумма)',
+    required: false,
   })
   @IsNumber()
   @Min(0)
-  @IsNotEmpty()
-  bringEmployeeBonus: number;
+  @IsOptional()
+  bringEmployeeBonus?: number;
 
   @ApiPropertyOptional({
     example: 300000,
@@ -103,17 +101,20 @@ export class CreateSaleDto {
   @IsOptional()
   managerEmployeeBonus?: number;
 
-  @ApiProperty({ example: 1000000, description: 'Общая сумма бонусов' })
+  @ApiPropertyOptional({
+    example: 1000000,
+    description: 'Общая сумма бонусов сотрудников',
+    required: false,
+  })
   @IsNumber()
   @Min(0)
-  @IsNotEmpty()
-  totalBonuses: number;
+  @IsOptional()
+  totalBonuses?: number;
 
   @ApiProperty({ example: '2024-03-20T10:30:00Z', description: 'Дата продажи' })
   @IsDateString()
   @IsNotEmpty()
-  @Type(() => Date)
-  saleDate: Date;
+  saleDate: string;
 
   @ApiPropertyOptional({
     example: true,

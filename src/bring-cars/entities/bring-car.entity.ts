@@ -17,6 +17,7 @@ import { Transmission } from '../../transmissions/entities/transmission.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 import { BringCarImage } from '../../bring-car-images/entities/bring-car-image.entity';
 import { SalesStatus } from '../../sales-statuses/entities/sales-status.entity';
+import { BringCarStatus } from 'src/bring-car-statuses/entities/bring-car-status.entity';
 
 @Entity('bring_cars')
 export class BringCar {
@@ -85,6 +86,13 @@ export class BringCar {
   @ManyToOne(() => Employee, { eager: true })
   @JoinColumn({ name: 'bringEmployeeId' })
   bringEmployee: Employee;
+
+  @Column({ type: 'varchar', length: 50, default: 'BRINGED' })
+  bringCarStatusCode: string;
+
+  @ManyToOne(() => BringCarStatus)
+  @JoinColumn({ name: 'bringCarStatusCode', referencedColumnName: 'code' })
+  bringCarStatus: BringCarStatus;
 
   @Column({ type: 'timestamp' })
   createdAt: Date;
