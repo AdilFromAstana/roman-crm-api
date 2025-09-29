@@ -53,6 +53,7 @@ export class BringCarsService {
       ...createBringCarDto,
       featureCodes: createBringCarDto.featureCodes || [],
       isActive: createBringCarDto.isActive ?? true,
+      createdAt: new Date(),
     });
 
     const savedCar = await this.bringCarsRepository.save(bringCar);
