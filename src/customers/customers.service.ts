@@ -7,7 +7,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { Customer } from './entities/customer.entity';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -37,6 +37,69 @@ export class CustomersService {
       isActive: createCustomerDto.isActive ?? true,
     });
     return this.customersRepository.save(customer);
+  }
+
+  async findAllPaginated(query: any) {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      sort = 'createdAt',
+      order = 'DESC',
+      trafficSourceCode,
+      customerStatusCode,
+      warmingLevel,
+      isActive,
+    } = query;
+
+    const qb = this.customersRepository
+      .createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.trafficSource', 'trafficSource')
+      .leftJoinAndSelect('customer.customerStatus', 'customerStatus')
+      .orderBy(`customer.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
+
+    if (search) {
+      qb.andWhere(
+        new Brackets((qb) => {
+          qb.where('customer.firstName ILIKE :search', {
+            search: `%${search}%`,
+          })
+            .orWhere('customer.lastName ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('customer.phone ILIKE :search', { search: `%${search}%` })
+            .orWhere('customer.email ILIKE :search', { search: `%${search}%` })
+            .orWhere('customer.iin ILIKE :search', { search: `%${search}%` });
+        }),
+      );
+    }
+
+    if (trafficSourceCode) {
+      qb.andWhere('customer.trafficSourceCode = :trafficSourceCode', {
+        trafficSourceCode,
+      });
+    }
+
+    if (customerStatusCode) {
+      qb.andWhere('customer.customerStatusCode = :customerStatusCode', {
+        customerStatusCode,
+      });
+    }
+
+    if (warmingLevel) {
+      qb.andWhere('customer.warmingLevel = :warmingLevel', { warmingLevel });
+    }
+
+    if (isActive !== undefined) {
+      qb.andWhere('customer.isActive = :isActive', {
+        isActive: isActive === 'true',
+      });
+    }
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    return { data, total, page, limit };
   }
 
   async findAll(): Promise<Customer[]> {

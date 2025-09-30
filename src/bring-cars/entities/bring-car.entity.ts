@@ -16,7 +16,6 @@ import { FuelType } from '../../fuel-types/entities/fuel-type.entity';
 import { Transmission } from '../../transmissions/entities/transmission.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 import { BringCarImage } from '../../bring-car-images/entities/bring-car-image.entity';
-import { SalesStatus } from '../../sales-statuses/entities/sales-status.entity';
 import { BringCarStatus } from 'src/bring-car-statuses/entities/bring-car-status.entity';
 
 @Entity('bring_cars')
@@ -87,10 +86,10 @@ export class BringCar {
   @JoinColumn({ name: 'bringEmployeeId' })
   bringEmployee: Employee;
 
-  @Column({ type: 'varchar', length: 50, default: 'BRINGED' })
+  @Column({ name: 'bringCarStatusCode', default: "BRINGED" })
   bringCarStatusCode: string;
 
-  @ManyToOne(() => BringCarStatus)
+  @ManyToOne(() => BringCarStatus, { eager: false })
   @JoinColumn({ name: 'bringCarStatusCode', referencedColumnName: 'code' })
   bringCarStatus: BringCarStatus;
 

@@ -7,9 +7,8 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Разрешить CORS для всех origins (только для разработки!)
   app.enableCors({
-    origin: true, // Разрешить всем
+    origin: '*', // можно указать массив доменов, если хочешь ограничить
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

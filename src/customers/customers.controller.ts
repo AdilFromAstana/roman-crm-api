@@ -8,6 +8,7 @@ import {
   Delete,
   HttpStatus,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
@@ -32,15 +33,20 @@ export class CustomersController {
     return this.customersService.create(createCustomerDto);
   }
 
+  // @Get()
+  // @ApiOperation({ summary: 'Получить всех клиентов' })
+  // @ApiResponse({
+  //   status: 200,
+  //   description: 'Список клиентов',
+  //   type: [Customer],
+  // })
+  // findAll() {
+  //   return this.customersService.findAll();
+  // }
+
   @Get()
-  @ApiOperation({ summary: 'Получить всех клиентов' })
-  @ApiResponse({
-    status: 200,
-    description: 'Список клиентов',
-    type: [Customer],
-  })
-  findAll() {
-    return this.customersService.findAll();
+  findAll(@Query() query: any) {
+    return this.customersService.findAllPaginated(query);
   }
 
   @Get(':id')

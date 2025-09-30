@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, Brackets } from 'typeorm';
 import { Sale } from './entities/sale.entity';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
@@ -21,6 +21,7 @@ import { EmployeesService } from 'src/employees/employees.service';
 import { SalesStatusesService } from 'src/sales-statuses/sales-statuses.service';
 import { EmployeeIncomesService } from 'src/employee-incomes/employee-incomes.service';
 import { SaleStatus } from './enums/sale-status.enum';
+import { GetSalesDto } from './dto/get-sales.dto';
 
 @Injectable()
 export class SalesService {
@@ -68,6 +69,122 @@ export class SalesService {
         'salesStatus',
       ],
     });
+  }
+
+  async getSales(query: GetSalesDto): Promise<{
+    data: Sale[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const normalizedQuery = {
+      ...query,
+      order: query.order
+        ? (query.order.toUpperCase() as 'ASC' | 'DESC')
+        : 'DESC',
+    };
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      sort,
+      order = 'DESC',
+      salesStatusCode,
+      isCommissionPaid,
+    } = normalizedQuery;
+
+    const skip = (page - 1) * limit;
+
+    const qb = this.salesRepository
+      .createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.bringCar', 'bringCar')
+      .leftJoinAndSelect('bringCar.brand', 'brand')
+      .leftJoinAndSelect('bringCar.model', 'model')
+      .leftJoinAndSelect('sale.customer', 'customer')
+      .leftJoinAndSelect('sale.saleEmployee', 'saleEmployee')
+      .leftJoinAndSelect('sale.bringEmployee', 'bringEmployee')
+      .leftJoinAndSelect('sale.managerEmployee', 'managerEmployee')
+      .leftJoinAndSelect('sale.salesStatus', 'salesStatus');
+
+    // Фильтры
+    if (salesStatusCode) {
+      qb.andWhere('sale.salesStatusCode = :salesStatusCode', {
+        salesStatusCode,
+      });
+    }
+
+    if (isCommissionPaid !== undefined) {
+      qb.andWhere('sale.isCommissionPaid = :isCommissionPaid', {
+        isCommissionPaid: isCommissionPaid === 'true',
+      });
+    }
+
+    // Поиск
+    if (search) {
+      qb.andWhere(
+        new Brackets((qb) => {
+          qb.where('customer.firstName ILIKE :search', {
+            search: `%${search}%`,
+          })
+            .orWhere('customer.lastName ILIKE :search', {
+              search: `%${search}%`,
+            })
+            .orWhere('customer.phone ILIKE :search', { search: `%${search}%` })
+            .orWhere('brand.name ILIKE :search', { search: `%${search}%` })
+            .orWhere('model.name ILIKE :search', { search: `%${search}%` })
+            .orWhere('sale.id::text ILIKE :search', { search: `%${search}%` });
+        }),
+      );
+    }
+
+    // Сортировка
+    if (sort) {
+      switch (sort) {
+        case 'bringCar':
+          qb.orderBy('brand.name', order)
+            .addOrderBy('model.name', order)
+            .addOrderBy('bringCar.year', order);
+          break;
+        case 'customer':
+          qb.orderBy('customer.lastName', order).addOrderBy(
+            'customer.firstName',
+            order,
+          );
+          break;
+        case 'saleEmployee':
+          qb.orderBy('saleEmployee.lastName', order).addOrderBy(
+            'saleEmployee.firstName',
+            order,
+          );
+          break;
+        case 'bringEmployee':
+          qb.orderBy('bringEmployee.lastName', order).addOrderBy(
+            'bringEmployee.firstName',
+            order,
+          );
+          break;
+        case 'managerEmployee':
+          qb.orderBy('managerEmployee.lastName', order).addOrderBy(
+            'managerEmployee.firstName',
+            order,
+          );
+          break;
+        default:
+          qb.orderBy(`sale.${sort}`, order);
+      }
+    } else {
+      qb.orderBy('sale.saleDate', 'DESC');
+    }
+
+    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
   }
 
   async findOne(id: string): Promise<Sale> {

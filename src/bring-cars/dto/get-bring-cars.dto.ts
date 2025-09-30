@@ -6,6 +6,7 @@ import {
   IsString,
   IsEnum,
   IsArray,
+  IsIn,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
@@ -97,4 +98,8 @@ export class GetBringCarsDto {
   @IsArray()
   @IsString({ each: true })
   featureCodes?: string[];
+
+  @IsOptional()
+  @IsIn(['BRINGED', 'IN_REVIEW', 'FOR_SALE', 'SOLD', 'CANCELLED'])
+  bringCarStatusCode?: string;
 }

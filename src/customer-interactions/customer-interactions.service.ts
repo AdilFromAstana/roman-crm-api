@@ -30,11 +30,17 @@ export class CustomerInteractionsService {
     createCustomerInteractionDto: CreateCustomerInteractionDto,
   ): Promise<CustomerInteraction> {
     // Проверяем существование связанных сущностей
+    console.log('createCustomerInteractionDto: ', createCustomerInteractionDto);
+
     await this.validateRelatedEntities(createCustomerInteractionDto);
 
     const interaction = this.customerInteractionsRepository.create({
       ...createCustomerInteractionDto,
       isActive: createCustomerInteractionDto.isActive ?? true,
+      interactionDate: new Date(createCustomerInteractionDto.interactionDate), // гарантируем Date
+      nextActionDate: createCustomerInteractionDto.nextActionDate
+        ? new Date(createCustomerInteractionDto.nextActionDate)
+        : undefined,
     });
 
     const savedInteraction =

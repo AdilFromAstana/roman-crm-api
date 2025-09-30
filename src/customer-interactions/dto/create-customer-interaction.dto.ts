@@ -71,8 +71,7 @@ export class CreateCustomerInteractionDto {
   })
   @IsDateString()
   @IsNotEmpty()
-  @Type(() => Date)
-  interactionDate: Date;
+  interactionDate: string;
 
   @ApiPropertyOptional({
     example: '2024-03-22T11:00:00Z',
@@ -81,8 +80,7 @@ export class CreateCustomerInteractionDto {
   })
   @IsDateString()
   @IsOptional()
-  @Type(() => Date)
-  nextActionDate?: Date;
+  nextActionDate?: string;
 
   @ApiPropertyOptional({
     example: 'Не забыть отправить КП',

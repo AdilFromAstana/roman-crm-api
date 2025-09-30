@@ -103,6 +103,11 @@ export class CreateBringCarDto {
   @IsNotEmpty()
   bringEmployeeId: string;
 
+  @ApiProperty({ example: 'Загнали', description: 'Статус загона машины' })
+  @IsNotEmpty()
+  @IsString()
+  bringCarStatusCode: string;
+
   @ApiProperty({ example: '2024-01-15T10:30:00Z', description: 'Дата загона' })
   @IsNotEmpty()
   @Type(() => Date)

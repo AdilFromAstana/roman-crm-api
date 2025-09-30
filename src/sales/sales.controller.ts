@@ -8,12 +8,14 @@ import {
   Delete,
   HttpStatus,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { Sale } from './entities/sale.entity';
+import { GetSalesDto } from './dto/get-sales.dto';
 
 @ApiTags('sales')
 @Controller('sales')
@@ -32,11 +34,29 @@ export class SalesController {
     return this.salesService.create(createSaleDto);
   }
 
+  // @Get()
+  // @ApiOperation({ summary: 'Получить все продажи' })
+  // @ApiResponse({ status: 200, description: 'Список продаж', type: [Sale] })
+  // findAll() {
+  //   return this.salesService.findAll();
+  // }
+
   @Get()
-  @ApiOperation({ summary: 'Получить все продажи' })
-  @ApiResponse({ status: 200, description: 'Список продаж', type: [Sale] })
-  findAll() {
-    return this.salesService.findAll();
+  @ApiOperation({ summary: 'Получить продажи с пагинацией и фильтрацией' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список продаж с метаданными',
+    schema: {
+      example: {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+      },
+    },
+  })
+  async getSales(@Query() query: GetSalesDto) {
+    return this.salesService.getSales(query);
   }
 
   @Get(':id')

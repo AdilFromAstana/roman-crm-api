@@ -32,6 +32,7 @@ export class CustomerInteractionsController {
   })
   @ApiResponse({ status: 400, description: 'Неверные данные' })
   create(@Body() createCustomerInteractionDto: CreateCustomerInteractionDto) {
+    console.log("createCustomerInteractionDto: ", createCustomerInteractionDto)
     return this.customerInteractionsService.create(
       createCustomerInteractionDto,
     );

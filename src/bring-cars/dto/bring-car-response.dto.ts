@@ -66,6 +66,23 @@ export class BringCarImageResponseDto {
   order: number;
 }
 
+export class BringCarStatusCodeDto {
+  @ApiProperty()
+  code: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  description?: string;
+
+  @ApiProperty()
+  isActive?: boolean;
+
+  @ApiProperty()
+  sortOrder?: number;
+}
+
 export class BringCarResponseDto {
   @ApiProperty()
   id: string;
@@ -117,6 +134,12 @@ export class BringCarResponseDto {
 
   @ApiProperty()
   description: string;
+
+  @ApiProperty()
+  bringCarStatusCode: string;
+
+  @ApiProperty({ type: BringCarStatusCodeDto })
+  bringCarStatus: BringCarStatusCodeDto;
 
   @ApiProperty()
   bringEmployeeId: string;

@@ -51,6 +51,7 @@ export class BringCarsService {
 
     const bringCar = this.bringCarsRepository.create({
       ...createBringCarDto,
+      bringCarStatusCode: 'BRINGED',
       featureCodes: createBringCarDto.featureCodes || [],
       isActive: createBringCarDto.isActive ?? true,
       createdAt: new Date(),
@@ -98,7 +99,6 @@ export class BringCarsService {
     page: number;
     limit: number;
   }> {
-    console.log('Received query:', JSON.stringify(query, null, 2));
     const normalizedQuery = {
       ...query,
       order: query.order
@@ -123,6 +123,7 @@ export class BringCarsService {
       priceFrom,
       priceTo,
       featureCodes,
+      bringCarStatusCode,
     } = normalizedQuery;
 
     const skip = (page - 1) * limit;
@@ -135,9 +136,16 @@ export class BringCarsService {
       .leftJoinAndSelect('bringCar.fuelType', 'fuelType')
       .leftJoinAndSelect('bringCar.transmission', 'transmission')
       .leftJoinAndSelect('bringCar.bringEmployee', 'employee')
-      .leftJoinAndSelect('bringCar.images', 'images');
+      .leftJoinAndSelect('bringCar.images', 'images')
+      .leftJoinAndSelect('bringCar.bringCarStatus', 'status');
 
     // Фильтры по кодам
+    if (bringCarStatusCode) {
+      qb.andWhere('bringCar.bringCarStatusCode = :bringCarStatusCode', {
+        bringCarStatusCode,
+      });
+    }
+
     if (brandCodes && brandCodes.length > 0) {
       qb.andWhere('bringCar.brandCode IN (:...brandCodes)', { brandCodes });
     }
@@ -499,6 +507,8 @@ export class BringCarsService {
       },
       featureCodes: car.featureCodes,
       description: car.description,
+      bringCarStatusCode: car.bringCarStatusCode,
+      bringCarStatus: car.bringCarStatus,
       bringEmployeeId: car.bringEmployeeId,
       bringEmployee: {
         id: car.bringEmployee.id,
